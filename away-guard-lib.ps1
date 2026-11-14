@@ -1,4 +1,4 @@
-﻿# away-guard-lib.ps1
+# away-guard-lib.ps1
 # Shared engine for AwayGuard. Dot-source this file, then call the functions.
 # ASCII only: Windows PowerShell 5.1 reads BOM-less files as ANSI (GBK on a
 # Chinese Windows) and a stray multibyte character would eat a quote.
@@ -594,7 +594,8 @@ function Invoke-Host {
   while ($true) {
     # if the supervisor that started us is gone, do not linger as an orphan
     # holding the mutex (a plain task stop would otherwise leave one behind).
-    # A named mutex is PID-reuse proof: the OS destroys it with the process.
+    # A named mutex is PID-reuse proof; the parent-process name is the fallback
+    # for an older supervisor that does not publish the mutex yet.
     if ($script:SupervisorPid -gt 0) {
       $alive = $false
       try {
@@ -602,6 +603,12 @@ function Invoke-Host {
         $m2.Dispose()
         $alive = $true
       } catch { }
+      if (-not $alive) {
+        try {
+          $pp = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $script:SupervisorPid) -ErrorAction Stop
+          if ($pp -and $pp.Name -eq 'AwayGuardSupervisor.exe') { $alive = $true }
+        } catch { }
+      }
       if (-not $alive) {
         Write-Log 'supervisor is gone -> host exits' 'INFO'
         return
