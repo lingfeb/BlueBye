@@ -22,7 +22,7 @@ if (-not $Quiet) {
 }
 
 Write-Host '停止开机任务…'
-foreach ($taskName in @('BlueBye-Host', 'BlueBye-Watchdog')) {
+foreach ($taskName in @('BlueBye-Host', 'BlueBye-Watchdog', 'BlueBye-Tray')) {
   Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
   Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 }

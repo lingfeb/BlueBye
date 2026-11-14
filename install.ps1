@@ -238,6 +238,15 @@ try {
   Write-Host ("无法枚举旧进程: " + $_.Exception.Message)
 }
 
+# a tray/UI instance from the previous build must be replaced too
+try {
+  Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop | Where-Object {
+    $_.CommandLine -and $_.CommandLine -match 'bluebye-ui\.ps1'
+  } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+} catch { }
+
 # ------------------------------------------------------- supervisor binary ----
 # A tiny compiled launcher without a console window. A console process gets
 # killed by CTRL_C/CTRL_CLOSE (exit code 0xC000013A) when its console goes away,
@@ -251,9 +260,24 @@ using System.IO;
 using System.Threading;
 
 public static class BlueByeSupervisor {
-  public static void Main() {
+  public static void Main(string[] args) {
     string dir = AppDomain.CurrentDomain.BaseDirectory;
     string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
+
+    // --tray: run the settings window in the notification area, no console
+    if (args != null && Array.IndexOf(args, "--tray") >= 0) {
+      try {
+        var t = new ProcessStartInfo(ps);
+        t.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + Path.Combine(dir, "bluebye-ui.ps1") + "\" -Tray";
+        t.UseShellExecute = false;
+        t.CreateNoWindow = true;
+        t.WorkingDirectory = dir;
+        var tp = Process.Start(t);
+        if (tp != null) tp.WaitForExit();
+      } catch { }
+      return;
+    }
+
     string script = Path.Combine(dir, "bluebye.ps1");
     string log = Path.Combine(dir, "supervisor.log");
     string stop = Path.Combine(dir, "supervisor.stop");
@@ -419,8 +443,61 @@ $wdXml = @"
 Register-ScheduledTask -TaskName $wdName -Xml $wdXml -Force | Out-Null
 Write-Host "看门狗任务已注册: $wdName"
 
+# tray: keeps BlueBye one double-click away, window closed = hidden in the tray
+$trayName = 'BlueBye-Tray'
+$trayXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <URI>\$trayName</URI>
+    <Description>BlueBye tray icon: the settings window stays one double-click away.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>$sid</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>$sid</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$supervisor</Command>
+      <Arguments>--tray</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+"@
+Register-ScheduledTask -TaskName $trayName -Xml $trayXml -Force | Out-Null
+Write-Host "托盘任务已注册: $trayName"
+
 if (-not $NoStart) {
   Start-ScheduledTask -TaskName $taskName
+  Start-ScheduledTask -TaskName $trayName
   Start-Sleep -Seconds 3
 }
 

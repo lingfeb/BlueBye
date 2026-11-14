@@ -58,6 +58,7 @@ No administrator rights are needed: the installer only writes to `%LOCALAPPDATA%
 | `BlueByeSupervisor.exe` | Console-less supervisor: runs the PowerShell host and restarts it within 5 s if it exits |
 | Scheduled task `BlueBye-Host` | Starts the supervisor at logon (hidden, no console window) |
 | Scheduled task `BlueBye-Watchdog` | Every 20 minutes checks "process alive **and** heartbeat fresh"; restarts if either fails |
+| Scheduled task `BlueBye-Tray` | Puts the window into the notification area at logon; double-click the icon or the desktop shortcut to open it |
 
 There are two layers in the background: the supervisor exe (no console, so it cannot be killed by console-control events) and the PowerShell host that ticks every 10 seconds and writes a heartbeat. If the heartbeat is older than three ticks the watchdog force-restarts it — you never get a "process is there but actually hung" situation.
 
@@ -98,7 +99,7 @@ Double-click "BlueBye" on the desktop. The window is light and friendly: a gradi
 - **Test Bluetooth** — really switch it off and back on (~5 s) to verify the chain
 - **Start with Windows** — enables or disables both scheduled tasks
 
-The window is frameless: drag it by the header, minimise/close in the top-right corner. Tab shows a blue focus ring.
+The window is frameless: drag it by the header, minimise/close in the top-right corner. **Closing it does not quit** — it hides into the notification area and the guard keeps running; double-click the tray icon (or the desktop shortcut again) to bring it back. The tray menu also offers leave-now, restore, start-with-Windows and quit. Tab shows a blue focus ring.
 
 Settings are applied within 40 seconds (the host re-reads the config every 30 s, plus at most one 10 s tick).
 

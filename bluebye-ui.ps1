@@ -1,7 +1,7 @@
 ﻿# bluebye-ui.ps1 - BlueBye settings window (WPF, light cute theme).
 # Chinese literals: this file must be saved as UTF-8 *with BOM* (see dev/set-bom.ps1).
 
-param([switch]$SelfTest)
+param([switch]$SelfTest, [switch]$Tray)
 
 $ErrorActionPreference = 'Stop'
 
@@ -16,16 +16,22 @@ $script:Quiet = $true
 
 $script:EnginePath = Join-Path $here 'bluebye.ps1'
 $script:TaskName = 'BlueBye-Host'
-$script:TaskNames = @('BlueBye-Host', 'BlueBye-Watchdog')
+$script:TaskNames = @('BlueBye-Host', 'BlueBye-Watchdog', 'BlueBye-Tray')
 
 # single instance
 $script:Mutex = New-Object System.Threading.Mutex($false, 'Local\BlueByeUI')
 $got = $false
 try { $got = $script:Mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $got = $true }
 if (-not $got) {
-  [void][System.Windows.MessageBox]::Show('BlueBye 已经在运行了。', 'BlueBye')
+  # another instance is already living in the tray: ask it to show its window
+  try {
+    $ev = [System.Threading.EventWaitHandle]::OpenExisting('Local\BlueByeShow')
+    [void]$ev.Set()
+    $ev.Dispose()
+  } catch { }
   return
 }
+$script:ShowEvent = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\BlueByeShow')
 
 # ------------------------------------------------------------------ xaml ----
 
@@ -722,6 +728,113 @@ $win.FindName('BtnUninstall').Add_Click({
   }
 })
 
+# ---------------------------------------------------------------- tray ----
+
+$script:Exiting = $false
+$script:TrayIcon = $null
+
+function Show-MainWindow {
+  try {
+    $win.ShowInTaskbar = $true
+    $win.Show()
+    $win.WindowState = 'Normal'
+    $win.Activate()
+  } catch { }
+}
+
+function Hide-MainWindow {
+  try {
+    $win.Hide()
+    $win.ShowInTaskbar = $false
+  } catch { }
+}
+
+function Exit-BlueBye {
+  $script:Exiting = $true
+  try { if ($script:TrayIcon) { $script:TrayIcon.Visible = $false; $script:TrayIcon.Dispose() } } catch { }
+  try { $script:ShowEvent.Dispose() } catch { }
+  try { $win.Close() } catch { }
+  try { $script:App.Shutdown() } catch { }
+}
+
+function Set-AutoStart([bool]$on) {
+  foreach ($n in $script:TaskNames) {
+    if ($on) { Enable-ScheduledTask -TaskName $n -ErrorAction Stop | Out-Null }
+    else { Disable-ScheduledTask -TaskName $n -ErrorAction Stop | Out-Null }
+  }
+}
+
+if (-not $SelfTest) {
+  Add-Type -AssemblyName System.Windows.Forms
+  Add-Type -AssemblyName System.Drawing
+
+  $ni = New-Object System.Windows.Forms.NotifyIcon
+  try {
+    $trayIco = Join-Path $here 'bluebye.ico'
+    if (Test-Path $trayIco) { $ni.Icon = New-Object System.Drawing.Icon($trayIco) }
+    else { $ni.Icon = [System.Drawing.SystemIcons]::Application }
+  } catch { $ni.Icon = [System.Drawing.SystemIcons]::Application }
+  $ni.Text = 'BlueBye'
+  $ni.Visible = $true
+
+  $menu = New-Object System.Windows.Forms.ContextMenuStrip
+  $miOpen = $menu.Items.Add('打开设置')
+  $miOpen.Add_Click({ Show-MainWindow })
+
+  $miNight = $menu.Items.Add('立即下班模式')
+  $miNight.Add_Click({
+    try {
+      Set-Msg '正在暂停播放并断开蓝牙…' '#E8931F'
+      [void](Invoke-Engine 'Night')
+      Update-Status
+      Set-Msg '已进入下班模式' '#E8931F'
+    } catch { }
+  })
+
+  $miRestore = $menu.Items.Add('恢复蓝牙与播放')
+  $miRestore.Add_Click({
+    try {
+      [void](Invoke-Engine 'Restore')
+      [void](Invoke-Engine 'Resume')
+      Update-Status
+      Set-Msg '蓝牙已恢复' '#22B573'
+    } catch { }
+  })
+
+  [void]$menu.Items.Add('-')
+
+  $miAuto = $menu.Items.Add('开机自动启动')
+  $miAuto.CheckOnClick = $true
+  try {
+    $miAuto.Checked = ((Get-ScheduledTask -TaskName $script:TaskName -ErrorAction Stop).State -ne 'Disabled')
+  } catch { }
+  $miAuto.Add_Click({
+    try {
+      Set-AutoStart ([bool]$miAuto.Checked)
+      if ($miAuto.Checked) { Set-Msg '已开启开机自启' '#22B573' } else { Set-Msg '已关闭开机自启' '#E8931F' }
+    } catch { }
+  })
+
+  [void]$menu.Items.Add('-')
+
+  $miExit = $menu.Items.Add('退出 BlueBye（守护继续后台运行）')
+  $miExit.Add_Click({ Exit-BlueBye })
+
+  $ni.ContextMenuStrip = $menu
+  $ni.Add_MouseDoubleClick({ Show-MainWindow })
+  $script:TrayIcon = $ni
+}
+
+$win.Add_Closing({
+  param($sender, $e)
+  try { ('closing: exiting=' + $script:Exiting + ' type=' + $e.GetType().Name) | Add-Content -Path (Join-Path $here 'ui-debug.log') -Encoding UTF8 } catch { }
+  if (-not $script:Exiting) {
+    try { $e.Cancel = $true } catch { }
+    Hide-MainWindow
+    Set-Msg '已收进托盘，守护仍在后台运行' '#5E6A85'
+  }
+})
+
 # ------------------------------------------------------------------- run ----
 
 Load-ConfigToUi
@@ -781,9 +894,26 @@ if ($SelfTest) {
 
 $timer = New-Object System.Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds(1)
-$timer.Add_Tick({ try { Update-Status } catch { } })
+$timer.Add_Tick({
+  try { Update-Status } catch { }
+  try { if ($script:ShowEvent -and $script:ShowEvent.WaitOne(0)) { Show-MainWindow } } catch { }
+  try { if ($script:TrayIcon) { $script:TrayIcon.Text = ('BlueBye · ' + (E 'TxtState').Text) } } catch { }
+})
 $timer.Start()
 
-$win.Add_Closed({ $timer.Stop(); try { $script:Mutex.ReleaseMutex() } catch { } })
+$win.Add_Closed({
+  $timer.Stop()
+  try { if ($script:TrayIcon) { $script:TrayIcon.Visible = $false; $script:TrayIcon.Dispose() } } catch { }
+  try { $script:Mutex.ReleaseMutex() } catch { }
+})
 
-[void]$win.ShowDialog()
+if ($Tray) {
+  $win.ShowInTaskbar = $false
+  $win.WindowState = 'Minimized'
+}
+
+# Application.Run (instead of ShowDialog) so hiding the window does not end the
+# message loop - that is what makes "close to tray" possible.
+$script:App = New-Object System.Windows.Application
+$script:App.ShutdownMode = [System.Windows.ShutdownMode]::OnExplicitShutdown
+[void]$script:App.Run($win)
