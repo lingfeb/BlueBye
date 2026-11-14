@@ -1,0 +1,30 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package source
+        run: |
+          mkdir -p dist
+          zip -r "dist/BlueBye-${GITHUB_REF_NAME}.zip" . \
+            -x '.git/*' -x 'dist/*'
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "dist/BlueBye-${GITHUB_REF_NAME}.zip" \
+            --title "BlueBye ${GITHUB_REF_NAME}" \
+            --generate-notes
