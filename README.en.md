@@ -12,6 +12,22 @@ BlueBye handles exactly that: when the desk is unattended it pauses the media an
 
 ---
 
+## Quick start
+
+1. Open [Releases](https://github.com/lingfeb/BlueBye/releases/latest) and download **`BlueBye-Setup.exe`**
+2. Double-click it, wait for the progress bar (about 5 seconds), then answer "Yes" to open the settings window
+3. A **BlueBye** icon appears on your desktop and the guard is already running in the background
+
+No administrator rights, no drivers, no services. To install from source instead:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+```
+
+Uninstall: the "卸载" button in the bottom-right corner, or `%LOCALAPPDATA%\BlueBye\uninstall.ps1`.
+
+---
+
 ## Requirements
 
 - Windows 10 / 11 (uses `Windows.Devices.Radios` and the system media session API; 1809+ is fine)
@@ -24,9 +40,9 @@ No administrator rights are needed: the installer only writes to `%LOCALAPPDATA%
 
 | Path | What it is |
 | --- | --- |
-| `away-guard-lib.ps1` | Engine: config, idle detection, WinRT Bluetooth, media sessions, state machine, host loop |
-| `away-guard.ps1` | CLI entry point (`Host` / `Tick` / `Status` / `Night` / `Restore` / `Resume` / `Probe` / `Test` / `Ensure`) |
-| `away-guard-ui.ps1` | WPF settings window: frameless rounded window, light cards, chibi mascot |
+| `bluebye-lib.ps1` | Engine: config, idle detection, WinRT Bluetooth, media sessions, state machine, host loop |
+| `bluebye.ps1` | CLI entry point (`Host` / `Tick` / `Status` / `Night` / `Restore` / `Resume` / `Probe` / `Test` / `Ensure`) |
+| `bluebye-ui.ps1` | WPF settings window: frameless rounded window, light cards, chibi mascot |
 | `install.ps1` | Install: compiles the supervisor, draws the icon and mascot, registers both tasks, creates the desktop shortcut |
 | `uninstall.ps1` | Uninstall: stops the tasks, removes the shortcut and the program folder |
 | `make-mascot.ps1` | Draws the mascot with GDI+ (generated automatically at install time) |
@@ -37,11 +53,11 @@ No administrator rights are needed: the installer only writes to `%LOCALAPPDATA%
 
 | Location | Content |
 | --- | --- |
-| `%LOCALAPPDATA%\AwayGuard` | Program folder (scripts, config, logs) |
-| Desktop shortcut "下班守护" | Opens the settings window |
-| `AwayGuardSupervisor.exe` | Console-less supervisor: runs the PowerShell host and restarts it within 5 s if it exits |
-| Scheduled task `AwayGuard-Host` | Starts the supervisor at logon (hidden, no console window) |
-| Scheduled task `AwayGuard-Watchdog` | Every 20 minutes checks "process alive **and** heartbeat fresh"; restarts if either fails |
+| `%LOCALAPPDATA%\BlueBye` | Program folder (scripts, config, logs) |
+| Desktop shortcut "BlueBye" | Opens the settings window |
+| `BlueByeSupervisor.exe` | Console-less supervisor: runs the PowerShell host and restarts it within 5 s if it exits |
+| Scheduled task `BlueBye-Host` | Starts the supervisor at logon (hidden, no console window) |
+| Scheduled task `BlueBye-Watchdog` | Every 20 minutes checks "process alive **and** heartbeat fresh"; restarts if either fails |
 
 There are two layers in the background: the supervisor exe (no console, so it cannot be killed by console-control events) and the PowerShell host that ticks every 10 seconds and writes a heartbeat. If the heartbeat is older than three ticks the watchdog force-restarts it — you never get a "process is there but actually hung" situation.
 
@@ -70,7 +86,7 @@ Back at the desk: any input → Bluetooth is back within 10 seconds and the head
 
 ## The settings window
 
-Double-click "下班守护" on the desktop. The window is light and friendly: a gradient header with a chibi mascot wearing Bluetooth headphones, then two white cards ("live status" and "behaviour").
+Double-click "BlueBye" on the desktop. The window is light and friendly: a gradient header with a chibi mascot wearing Bluetooth headphones, then two white cards ("live status" and "behaviour").
 
 - **Live status** — Bluetooth state, keyboard/mouse idle time, what the guard is doing, what is playing (blue / green / amber / red status dots)
 - **Idle threshold** — how many minutes without input counts as "away" (stepper)
@@ -90,7 +106,7 @@ Settings are applied within 40 seconds (the host re-reads the config every 30 s,
 
 ## Configuration file
 
-`%LOCALAPPDATA%\AwayGuard\config.json`
+`%LOCALAPPDATA%\BlueBye\config.json`
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -114,7 +130,7 @@ Save the file and it takes effect; no restart needed.
 ## Command line (optional)
 
 ```powershell
-$exe = "$env:LOCALAPPDATA\AwayGuard\away-guard.ps1"
+$exe = "$env:LOCALAPPDATA\BlueBye\bluebye.ps1"
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Status    # state + recent log
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Probe     # radio access, sessions, mic, ...
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Night     # leave now
@@ -123,7 +139,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Resume    # resum
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Ensure    # start the host if it is down
 ```
 
-Log: `%LOCALAPPDATA%\AwayGuard\guard.log` (rotates at 1 MB; the UI can open it for you).
+Log: `%LOCALAPPDATA%\BlueBye\bluebye.log` (rotates at 1 MB; the UI can open it for you).
 
 ---
 
@@ -132,7 +148,7 @@ Log: `%LOCALAPPDATA%\AwayGuard\guard.log` (rotates at 1 MB; the UI can open it f
 The "卸载" button in the bottom-right corner of the window, or:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\AwayGuard\uninstall.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\BlueBye\uninstall.ps1"
 ```
 
 It stops the guard, removes both scheduled tasks, the desktop shortcut and the program folder.

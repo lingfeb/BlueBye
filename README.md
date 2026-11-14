@@ -1,4 +1,4 @@
-# BlueBye · 下班守护
+# BlueBye
 
 **简体中文** · [English](README.en.md)
 
@@ -15,6 +15,22 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 
 ---
 
+## 快速开始
+
+1. 打开 [Releases](https://github.com/lingfeb/BlueBye/releases/latest)，下载 **`BlueBye-Setup.exe`**
+2. 双击运行，等进度条走完（约 5 秒），提示成功时点「是」直接打开设置界面
+3. 桌面上会多一个 **BlueBye** 图标，守护已在后台运行，今晚就生效
+
+不需要管理员权限，不会安装驱动或服务。想从源码安装：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+```
+
+卸载：界面右下角「卸载」，或运行 `%LOCALAPPDATA%\BlueBye\uninstall.ps1`。
+
+---
+
 ## 环境要求
 
 - Windows 10 / 11（用到 `Windows.Devices.Radios` 与系统媒体会话，Win10 1809+ 均可）
@@ -27,9 +43,9 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 
 | 路径 | 说明 |
 | --- | --- |
-| `away-guard-lib.ps1` | 引擎：配置、空闲检测、WinRT 蓝牙、媒体会话、状态机、宿主循环 |
-| `away-guard.ps1` | 命令行入口（`Host` / `Tick` / `Status` / `Night` / `Restore` / `Resume` / `Probe` / `Test` / `Ensure`） |
-| `away-guard-ui.ps1` | WPF 设置界面：无边框圆角窗口、浅色卡片、Q 版吉祥物 |
+| `bluebye-lib.ps1` | 引擎：配置、空闲检测、WinRT 蓝牙、媒体会话、状态机、宿主循环 |
+| `bluebye.ps1` | 命令行入口（`Host` / `Tick` / `Status` / `Night` / `Restore` / `Resume` / `Probe` / `Test` / `Ensure`） |
+| `bluebye-ui.ps1` | WPF 设置界面：无边框圆角窗口、浅色卡片、Q 版吉祥物 |
 | `install.ps1` | 安装：编译守护器、生成图标与吉祥物、注册两个计划任务、创建桌面快捷方式 |
 | `uninstall.ps1` | 卸载：停任务、删快捷方式与程序目录 |
 | `make-mascot.ps1` | 用 GDI+ 画界面里的吉祥物（安装时自动生成） |
@@ -40,11 +56,11 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 
 | 位置 | 内容 |
 | --- | --- |
-| `%LOCALAPPDATA%\AwayGuard` | 程序目录（脚本、配置、日志） |
-| 桌面「下班守护」快捷方式 | 打开设置界面 |
-| `AwayGuardSupervisor.exe` | 无控制台的守护器：托管 PowerShell 宿主，宿主退出后 5 秒内自动重启 |
-| 计划任务 `AwayGuard-Host` | 登录时启动守护器（隐藏窗口、无控制台） |
-| 计划任务 `AwayGuard-Watchdog` | 每 20 分钟检查「进程在 + 心跳新鲜」，两者缺一就重启 |
+| `%LOCALAPPDATA%\BlueBye` | 程序目录（脚本、配置、日志） |
+| 桌面「BlueBye」快捷方式 | 打开设置界面 |
+| `BlueByeSupervisor.exe` | 无控制台的守护器：托管 PowerShell 宿主，宿主退出后 5 秒内自动重启 |
+| 计划任务 `BlueBye-Host` | 登录时启动守护器（隐藏窗口、无控制台） |
+| 计划任务 `BlueBye-Watchdog` | 每 20 分钟检查「进程在 + 心跳新鲜」，两者缺一就重启 |
 
 后台是「守护器 exe → PowerShell 宿主」两层：exe 没有控制台（避免被控制台事件杀死），宿主负责每 10 秒检查一次状态并写心跳；心跳超过 3 个周期没更新，看门狗会强制重启，不会出现「进程还在、其实已经卡死」。
 
@@ -74,7 +90,7 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 
 ## 设置界面
 
-双击桌面「下班守护」。界面是浅色的可爱风：顶部渐变横幅配一只戴蓝牙耳机的 Q 版小守护，下面是白色的「实时状态」和「行为设置」两块卡片。
+双击桌面「BlueBye」。界面是浅色的可爱风：顶部渐变横幅配一只戴蓝牙耳机的 Q 版小守护，下面是白色的「实时状态」和「行为设置」两块卡片。
 
 - **实时状态**：蓝牙当前状态、键鼠空闲多久、守护在做什么、正在播放什么（蓝/绿/琥珀/红四种状态点）
 - **空闲判定**：多少分钟没操作算离开（步进器调整）
@@ -94,7 +110,7 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 
 ## 配置文件
 
-`%LOCALAPPDATA%\AwayGuard\config.json`
+`%LOCALAPPDATA%\BlueBye\config.json`
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
@@ -118,7 +134,7 @@ BlueBye pauses whatever is playing and switches the Bluetooth radio off once you
 ## 命令行（可选）
 
 ```powershell
-$exe = "$env:LOCALAPPDATA\AwayGuard\away-guard.ps1"
+$exe = "$env:LOCALAPPDATA\BlueBye\bluebye.ps1"
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Status    # 当前状态 + 最近日志
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Probe     # 蓝牙授权、媒体会话、麦克风等诊断
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Night     # 立即下班模式
@@ -127,7 +143,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Resume    # 恢�
 powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Ensure    # 守护没跑就拉起来
 ```
 
-日志：`%LOCALAPPDATA%\AwayGuard\guard.log`（超过 1 MB 自动轮转，界面里也能直接打开）。
+日志：`%LOCALAPPDATA%\BlueBye\bluebye.log`（超过 1 MB 自动轮转，界面里也能直接打开）。
 
 ---
 
@@ -136,7 +152,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File $exe -Mode Ensure    # 守�
 界面右下角「卸载」，或者：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\AwayGuard\uninstall.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\BlueBye\uninstall.ps1"
 ```
 
 会停止守护、删除两个计划任务、桌面快捷方式和程序目录。

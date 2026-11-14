@@ -1,5 +1,5 @@
-﻿# install.ps1 - install AwayGuard for the current user.
-# Copies the program to %LOCALAPPDATA%\AwayGuard, writes a default config,
+﻿# install.ps1 - install BlueBye for the current user.
+# Copies the program to %LOCALAPPDATA%\BlueBye, writes a default config,
 # builds an icon + desktop shortcut and registers the logon task that keeps
 # the hidden guard host alive.
 #
@@ -12,15 +12,36 @@ $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $src      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$dst      = Join-Path $env:LOCALAPPDATA 'AwayGuard'
-$taskName = 'AwayGuard-Host'
+$dst      = Join-Path $env:LOCALAPPDATA 'BlueBye'
+$taskName = 'BlueBye-Host'
 $sid      = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 $psExe    = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+
+# ---- migrate from the previous "AwayGuard / 下班守护" build ----
+$legacyDir = Join-Path $env:LOCALAPPDATA 'AwayGuard'
+$legacyTasks = @('AwayGuard-Host', 'AwayGuard-Watchdog')
+$legacyLnk = Join-Path ([Environment]::GetFolderPath('Desktop')) '下班守护.lnk'
+if ((Test-Path $legacyDir) -or (Test-Path $legacyLnk) -or (Get-ScheduledTask -TaskName $legacyTasks[0] -ErrorAction SilentlyContinue)) {
+  Write-Host '发现旧版安装，正在迁移…'
+  foreach ($t in $legacyTasks) {
+    Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $t -Confirm:$false -ErrorAction SilentlyContinue
+  }
+  Get-Process -Name 'AwayGuardSupervisor' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object {
+      $_.CommandLine -and $_.CommandLine -match 'away-guard\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+  if (Test-Path $legacyLnk) { Remove-Item -LiteralPath $legacyLnk -Force -ErrorAction SilentlyContinue }
+  if (Test-Path $legacyDir) { Remove-Item -LiteralPath $legacyDir -Recurse -Force -ErrorAction SilentlyContinue }
+  Write-Host '旧版已清理'
+}
 
 Write-Host "安装到: $dst"
 
 New-Item -ItemType Directory -Path $dst -Force | Out-Null
-foreach ($f in @('away-guard-lib.ps1', 'away-guard.ps1', 'away-guard-ui.ps1', 'uninstall.ps1')) {
+foreach ($f in @('bluebye-lib.ps1', 'bluebye.ps1', 'bluebye-ui.ps1', 'uninstall.ps1')) {
   Copy-Item -Path (Join-Path $src $f) -Destination (Join-Path $dst $f) -Force
 }
 
@@ -32,7 +53,7 @@ function Ensure-Bom([string]$path) {
   [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($true)))
   Write-Host ("补写 BOM: " + (Split-Path -Leaf $path))
 }
-foreach ($f in @('away-guard-ui.ps1', 'uninstall.ps1')) { Ensure-Bom (Join-Path $dst $f) }
+foreach ($f in @('bluebye-ui.ps1', 'uninstall.ps1')) { Ensure-Bom (Join-Path $dst $f) }
 
 # ------------------------------------------------------------ default cfg ----
 
@@ -109,7 +130,7 @@ function Write-IcoFile($bitmaps, [string]$path) {
   $ms.Dispose()
 }
 
-function New-AwayGuardIcon([string]$path) {
+function New-BlueByeIcon([string]$path) {
   $bitmaps = @()
   foreach ($s in @(256, 64, 32, 16)) {
     $bmp = New-Object System.Drawing.Bitmap($s, $s, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -149,9 +170,9 @@ function New-AwayGuardIcon([string]$path) {
   foreach ($b in $bitmaps) { $b.Dispose() }
 }
 
-$icoPath = Join-Path $dst 'away-guard.ico'
+$icoPath = Join-Path $dst 'bluebye.ico'
 try {
-  New-AwayGuardIcon $icoPath
+  New-BlueByeIcon $icoPath
   $null = New-Object System.Drawing.Icon($icoPath)
   Write-Host "图标已生成: $icoPath"
 } catch {
@@ -174,19 +195,19 @@ if (-not $NoShortcut) {
     $desktop = [Environment]::GetFolderPath('Desktop')
     # remove leftovers from builds where install.ps1 lost its BOM (mojibake name)
     Get-ChildItem -Path $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue | Where-Object {
-      $_.Name -ne '下班守护.lnk' -and ($_.Name -match '涓|彮|瀹|堟|姢')
+      $_.Name -ne 'BlueBye.lnk' -and ($_.Name -match '涓|彮|瀹|堟|姢')
     } | ForEach-Object {
       Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
       Write-Host ("清理旧乱码快捷方式: " + $_.Name)
     }
-    $lnkPath = Join-Path $desktop '下班守护.lnk'
+    $lnkPath = Join-Path $desktop 'BlueBye.lnk'
     $ws = New-Object -ComObject WScript.Shell
     $sc = $ws.CreateShortcut($lnkPath)
     $sc.TargetPath = $psExe
-    $sc.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $dst 'away-guard-ui.ps1') + '"'
+    $sc.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $dst 'bluebye-ui.ps1') + '"'
     $sc.WorkingDirectory = $dst
     if ($icoPath) { $sc.IconLocation = $icoPath } else { $sc.IconLocation = "$env:SystemRoot\System32\imageres.dll,15" }
-    $sc.Description = '下班守护 · 离开后暂停播放并断开蓝牙耳机'
+    $sc.Description = 'BlueBye · 离开后暂停播放并断开蓝牙耳机'
     $sc.WindowStyle = 7
     $sc.Save()
     Write-Host "桌面快捷方式: $lnkPath"
@@ -199,7 +220,7 @@ if (-not $NoShortcut) {
 
 $stopFile = Join-Path $dst 'supervisor.stop'
 try { Set-Content -Path $stopFile -Value 'stop' -Encoding ASCII } catch { }
-Get-Process -Name 'AwayGuardSupervisor' -ErrorAction SilentlyContinue | ForEach-Object {
+Get-Process -Name 'BlueByeSupervisor' -ErrorAction SilentlyContinue | ForEach-Object {
   Write-Host "停止旧守护器 pid=$($_.Id)"
   Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
 }
@@ -208,7 +229,7 @@ Remove-Item -Path $stopFile -Force -ErrorAction SilentlyContinue
 
 try {
   Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Stop | Where-Object {
-    $_.CommandLine -and $_.CommandLine -match 'away-guard\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
+    $_.CommandLine -and $_.CommandLine -match 'bluebye\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
   } | ForEach-Object {
     Write-Host "停止旧宿主进程 pid=$($_.ProcessId)"
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
@@ -229,17 +250,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 
-public static class AwayGuardSupervisor {
+public static class BlueByeSupervisor {
   public static void Main() {
     string dir = AppDomain.CurrentDomain.BaseDirectory;
     string ps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
-    string script = Path.Combine(dir, "away-guard.ps1");
+    string script = Path.Combine(dir, "bluebye.ps1");
     string log = Path.Combine(dir, "supervisor.log");
     string stop = Path.Combine(dir, "supervisor.stop");
 
     // the host watches this mutex to notice that its supervisor died; the OS
     // releases it when this process goes away, so it cannot go stale like a PID
-    var alive = new System.Threading.Mutex(true, "Local\\AwayGuardSupervisorAlive");
+    var alive = new System.Threading.Mutex(true, "Local\\BlueByeSupervisorAlive");
 
     while (true) {
       if (File.Exists(stop)) {
@@ -266,8 +287,8 @@ public static class AwayGuardSupervisor {
 }
 '@
 
-$supervisor = Join-Path $dst 'AwayGuardSupervisor.exe'
-$tmpExe = Join-Path $dst 'AwayGuardSupervisor.tmp.exe'
+$supervisor = Join-Path $dst 'BlueByeSupervisor.exe'
+$tmpExe = Join-Path $dst 'BlueByeSupervisor.tmp.exe'
 Remove-Item -Path $tmpExe -Force -ErrorAction SilentlyContinue
 try {
   Add-Type -TypeDefinition $cs -OutputAssembly $tmpExe -OutputType WindowsApplication
@@ -286,14 +307,14 @@ Write-Host ("守护器大小: " + (Get-Item $supervisor).Length + " bytes")
 
 # ------------------------------------------------------------- task setup ----
 
-$engine = Join-Path $dst 'away-guard.ps1'
+$engine = Join-Path $dst 'bluebye.ps1'
 
 $xml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <URI>\$taskName</URI>
-    <Description>AwayGuard: pause media and switch the Bluetooth radio off when the desk is unattended, restore it when the user is back.</Description>
+    <Description>BlueBye: pause media and switch the Bluetooth radio off when the desk is unattended, restore it when the user is back.</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -342,14 +363,14 @@ Write-Host "开机任务已注册: $taskName"
 
 # watchdog: every 20 minutes, restart the host if it is not running
 # (Test-HostRunning is a mutex probe, so a healthy host costs ~200 ms)
-$wdName = 'AwayGuard-Watchdog'
+$wdName = 'BlueBye-Watchdog'
 $wdArgs = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $engine + '" -Mode Ensure'
 $wdXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <URI>\$wdName</URI>
-    <Description>AwayGuard watchdog: make sure the background host is alive.</Description>
+    <Description>BlueBye watchdog: make sure the background host is alive.</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>

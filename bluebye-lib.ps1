@@ -1,12 +1,12 @@
-# away-guard-lib.ps1
-# Shared engine for AwayGuard. Dot-source this file, then call the functions.
+# bluebye-lib.ps1
+# Shared engine for BlueBye. Dot-source this file, then call the functions.
 # ASCII only: Windows PowerShell 5.1 reads BOM-less files as ANSI (GBK on a
 # Chinese Windows) and a stray multibyte character would eat a quote.
 
 $script:Root = $PSScriptRoot
 if (-not $script:Root) { $script:Root = Split-Path -Parent $MyInvocation.MyCommand.Path }
 
-$script:LogFile    = Join-Path $script:Root 'guard.log'
+$script:LogFile    = Join-Path $script:Root 'bluebye.log'
 $script:StateFile  = Join-Path $script:Root 'state.json'
 $script:CfgFile    = Join-Path $script:Root 'config.json'
 $script:StatusFile = Join-Path $script:Root 'status.json'
@@ -81,11 +81,11 @@ function Write-Log([string]$msg, [string]$level = 'INFO') {
 # ----------------------------------------------------------------- idle ----
 
 function Get-IdleSeconds {
-  if (-not ('AwayGuard.IdleTime' -as [type])) {
+  if (-not ('BlueBye.IdleTime' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
-namespace AwayGuard {
+namespace BlueBye {
   public static class IdleTime {
     [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
     [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
@@ -99,7 +99,7 @@ namespace AwayGuard {
 }
 '@
   }
-  return [AwayGuard.IdleTime]::Seconds()
+  return [BlueBye.IdleTime]::Seconds()
 }
 
 # ---------------------------------------------------------------- winrt ----
@@ -350,7 +350,7 @@ function Test-BtHidConnected {
 
 function Test-HostRunning {
   try {
-    $m = [System.Threading.Mutex]::OpenExisting('Local\AwayGuardHost')
+    $m = [System.Threading.Mutex]::OpenExisting('Local\BlueByeHost')
     $m.Dispose()
     return $true
   } catch {
@@ -571,7 +571,7 @@ function Invoke-Host {
   $mutex = $null
   $acquired = $false
   try {
-    $mutex = New-Object System.Threading.Mutex($false, 'Local\AwayGuardHost')
+    $mutex = New-Object System.Threading.Mutex($false, 'Local\BlueByeHost')
     try { $acquired = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $acquired = $true }
   } catch {
     $acquired = $true
@@ -599,14 +599,14 @@ function Invoke-Host {
     if ($script:SupervisorPid -gt 0) {
       $alive = $false
       try {
-        $m2 = [System.Threading.Mutex]::OpenExisting('Local\AwayGuardSupervisorAlive')
+        $m2 = [System.Threading.Mutex]::OpenExisting('Local\BlueByeSupervisorAlive')
         $m2.Dispose()
         $alive = $true
       } catch { }
       if (-not $alive) {
         try {
           $pp = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $script:SupervisorPid) -ErrorAction Stop
-          if ($pp -and $pp.Name -eq 'AwayGuardSupervisor.exe') { $alive = $true }
+          if ($pp -and $pp.Name -eq 'BlueByeSupervisor.exe') { $alive = $true }
         } catch { }
       }
       if (-not $alive) {

@@ -1,4 +1,4 @@
-# e2e-test.ps1 - end to end check of the installed AwayGuard.
+# e2e-test.ps1 - end to end check of the installed BlueBye.
 #
 # Because a human is normally sitting at the machine while this runs, the test
 # makes "restore" impossible first (RestoreIdleSeconds = -1) so the off state
@@ -9,10 +9,10 @@
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
-$inst = Join-Path $env:LOCALAPPDATA 'AwayGuard'
-$exe = Join-Path $inst 'away-guard.ps1'
+$inst = Join-Path $env:LOCALAPPDATA 'BlueBye'
+$exe = Join-Path $inst 'bluebye.ps1'
 $cfgPath = Join-Path $inst 'config.json'
-$taskName = 'AwayGuard-Host'
+$taskName = 'BlueBye-Host'
 
 Add-Type -TypeDefinition @'
 using System;
@@ -90,4 +90,4 @@ Engine 'Resume' | Out-Null
 "3. restored on return         : " + $(if ($back -eq 'On') { 'PASS' } else { "FAIL ($back)" })
 ''
 '--- log tail ---------------------------------------------'
-Get-Content -Path (Join-Path $inst 'guard.log') -Tail 12 -Encoding UTF8 | ForEach-Object { "  $_" }
+Get-Content -Path (Join-Path $inst 'bluebye.log') -Tail 12 -Encoding UTF8 | ForEach-Object { "  $_" }

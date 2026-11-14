@@ -1,5 +1,5 @@
-﻿# away-guard.ps1 - command line front end for the AwayGuard engine.
-# ASCII only (see away-guard-lib.ps1).
+# bluebye.ps1 - command line front end for the BlueBye engine.
+# ASCII only (see bluebye-lib.ps1).
 
 param(
   [ValidateSet('Host', 'Tick', 'Status', 'Night', 'Restore', 'Resume', 'Probe', 'Test', 'Ensure')]
@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $here 'away-guard-lib.ps1')
+. (Join-Path $here 'bluebye-lib.ps1')
 $script:Quiet = ($Mode -eq 'Host')
 $script:SupervisorPid = $ParentPid
 
@@ -110,7 +110,7 @@ function Invoke-Ensure {
   if ((Test-HostRunning) -and (Test-HeartbeatFresh $maxAge)) { return 'running' }
 
   try {
-    $t = Get-ScheduledTask -TaskName 'AwayGuard-Host' -ErrorAction Stop
+    $t = Get-ScheduledTask -TaskName 'BlueBye-Host' -ErrorAction Stop
     if ($t.State -eq 'Disabled') { return 'disabled' }
   } catch {
     return 'no-task'
@@ -120,17 +120,17 @@ function Invoke-Ensure {
     # holds the mutex but stopped ticking: a hung WinRT call or a blocked loop.
     # Restarting the task alone is not enough (IgnoreNew sees it as running).
     Write-Log 'host holds the mutex but its heartbeat is stale -> restarting' 'ERROR'
-    Stop-ScheduledTask -TaskName 'AwayGuard-Host' -ErrorAction SilentlyContinue
-    Get-Process -Name 'AwayGuardSupervisor' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-ScheduledTask -TaskName 'BlueBye-Host' -ErrorAction SilentlyContinue
+    Get-Process -Name 'BlueByeSupervisor' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     try {
       Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object {
-        $_.CommandLine -and $_.CommandLine -match 'away-guard\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
+        $_.CommandLine -and $_.CommandLine -match 'bluebye\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
       } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     } catch { }
     Start-Sleep -Seconds 1
   }
 
-  Start-ScheduledTask -TaskName 'AwayGuard-Host' -ErrorAction SilentlyContinue
+  Start-ScheduledTask -TaskName 'BlueBye-Host' -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 4
   if ((Test-HostRunning) -and (Test-HeartbeatFresh $maxAge)) { 'restarted' } else { 'failed' }
 }

@@ -1,4 +1,4 @@
-﻿# away-guard-ui.ps1 - AwayGuard settings window (WPF, light cute theme).
+﻿# bluebye-ui.ps1 - BlueBye settings window (WPF, light cute theme).
 # Chinese literals: this file must be saved as UTF-8 *with BOM* (see dev/set-bom.ps1).
 
 param([switch]$SelfTest)
@@ -11,19 +11,19 @@ Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Xaml
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-. (Join-Path $here 'away-guard-lib.ps1')
+. (Join-Path $here 'bluebye-lib.ps1')
 $script:Quiet = $true
 
-$script:EnginePath = Join-Path $here 'away-guard.ps1'
-$script:TaskName = 'AwayGuard-Host'
-$script:TaskNames = @('AwayGuard-Host', 'AwayGuard-Watchdog')
+$script:EnginePath = Join-Path $here 'bluebye.ps1'
+$script:TaskName = 'BlueBye-Host'
+$script:TaskNames = @('BlueBye-Host', 'BlueBye-Watchdog')
 
 # single instance
-$script:Mutex = New-Object System.Threading.Mutex($false, 'Local\AwayGuardUI')
+$script:Mutex = New-Object System.Threading.Mutex($false, 'Local\BlueByeUI')
 $got = $false
 try { $got = $script:Mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $got = $true }
 if (-not $got) {
-  [void][System.Windows.MessageBox]::Show('AwayGuard 已经在运行了。', '下班守护')
+  [void][System.Windows.MessageBox]::Show('BlueBye 已经在运行了。', 'BlueBye')
   return
 }
 
@@ -32,7 +32,7 @@ if (-not $got) {
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="下班守护" Width="900" Height="632"
+        Title="BlueBye" Width="900" Height="632"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         FontFamily="Microsoft YaHei UI, Segoe UI" UseLayoutRounding="True"
@@ -283,7 +283,7 @@ $xaml = @'
               <Image x:Name="Mascot" Width="132" Height="132" VerticalAlignment="Center"
                      RenderOptions.BitmapScalingMode="HighQuality"/>
               <StackPanel Margin="8,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="下班守护" FontSize="27" FontWeight="Bold" Foreground="#2C3450"/>
+                <TextBlock Text="BlueBye" FontSize="27" FontWeight="Bold" Foreground="#2C3450"/>
                 <TextBlock Text="离开工位自动暂停音乐，回来自动接上" FontSize="12.5" Foreground="#5E6A85" Margin="2,7,0,0"/>
               </StackPanel>
             </StackPanel>
@@ -455,7 +455,7 @@ $xaml = @'
 $reader = New-Object System.Xml.XmlNodeReader ([xml]$xaml)
 $win = [Windows.Markup.XamlReader]::Load($reader)
 
-$icoPath = Join-Path $here 'away-guard.ico'
+$icoPath = Join-Path $here 'bluebye.ico'
 if (Test-Path $icoPath) {
   try { $win.Icon = [System.Windows.Media.Imaging.BitmapFrame]::Create([Uri]$icoPath) } catch { }
 }
@@ -680,7 +680,7 @@ $win.FindName('BtnTest').Add_Click({
 
 $win.FindName('BtnLog').Add_Click({
   try {
-    $log = Join-Path $here 'guard.log'
+    $log = Join-Path $here 'bluebye.log'
     if (Test-Path $log) { Start-Process -FilePath 'notepad.exe' -ArgumentList ('"' + $log + '"') }
     else { Set-Msg '还没有日志文件' '#E8931F' }
   } catch { Set-Msg ('打不开日志：' + $_.Exception.Message) '#B73A44' }
@@ -708,7 +708,7 @@ $win.FindName('BtnUninstall').Add_Click({
   try {
     $r = [System.Windows.MessageBox]::Show(
       "会停止守护、删除开机任务和程序文件。`r`n`r`n确定要卸载吗？",
-      '卸载下班守护',
+      '卸载BlueBye',
       [System.Windows.MessageBoxButton]::YesNo,
       [System.Windows.MessageBoxImage]::Warning)
     if ($r -ne [System.Windows.MessageBoxResult]::Yes) { return }

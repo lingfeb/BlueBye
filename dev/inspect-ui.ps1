@@ -3,7 +3,7 @@
 #  * OCR of the screenshot to prove the labels actually rendered
 # ASCII only.
 
-param([string]$Png = "$env:LOCALAPPDATA\AwayGuard\ui-selftest.png")
+param([string]$Png = "$env:LOCALAPPDATA\BlueBye\ui-selftest.png")
 
 Add-Type -AssemblyName System.Drawing
 
