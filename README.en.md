@@ -99,7 +99,7 @@ Double-click "BlueBye" on the desktop. The window is light and friendly: a gradi
 - **Test Bluetooth** — really switch it off and back on (~5 s) to verify the chain
 - **Start with Windows** — enables or disables both scheduled tasks
 
-The window is frameless: drag it by the header, minimise/close in the top-right corner. **Closing it does not quit** — it hides into the notification area and the guard keeps running; double-click the tray icon (or the desktop shortcut again) to bring it back. The tray menu also offers leave-now, restore, start-with-Windows and quit. Tab shows a blue focus ring.
+The window is frameless: drag it by the header, minimise/close in the top-right corner. **Closing it does not quit** — it hides into the notification area and the guard keeps running; double-click the tray icon (or the desktop shortcut again) to bring it back. The tray menu also offers leave-now, restore, start-with-Windows and **quit — which stops the guard as well** (a marker file keeps the watchdog quiet; logging in or opening the app again brings it back). Tab shows a blue focus ring.
 
 Settings are applied within 40 seconds (the host re-reads the config every 30 s, plus at most one 10 s tick).
 

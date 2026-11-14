@@ -578,6 +578,10 @@ function Invoke-Host {
   }
   if (-not $acquired) { return }
 
+  # a fresh host (logon / manual start) means the user wants the guard on again
+  $stoppedFlag = Join-Path $script:Root 'stopped.flag'
+  if (Test-Path $stoppedFlag) { Remove-Item $stoppedFlag -Force -ErrorAction SilentlyContinue }
+
   Write-Log 'host started' 'INFO'
   try {
     $radio = Get-BtRadio

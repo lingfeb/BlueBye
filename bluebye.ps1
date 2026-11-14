@@ -2,7 +2,7 @@
 # ASCII only (see bluebye-lib.ps1).
 
 param(
-  [ValidateSet('Host', 'Tick', 'Status', 'Night', 'Restore', 'Resume', 'Probe', 'Test', 'Ensure')]
+  [ValidateSet('Host', 'Tick', 'Status', 'Night', 'Restore', 'Resume', 'Probe', 'Test', 'Ensure', 'Start', 'Stop')]
   [string]$Mode = 'Tick',
   [int]$ParentPid = 0
 )
@@ -103,6 +103,9 @@ function Invoke-Status {
 }
 
 function Invoke-Ensure {
+  $flag = Join-Path $script:Root 'stopped.flag'
+  if (Test-Path $flag) { return 'stopped' }
+
   $cfg = Get-Cfg
   $maxAge = [int]$cfg.TickSeconds * 3
   if ($maxAge -lt 60) { $maxAge = 60 }
@@ -135,6 +138,40 @@ function Invoke-Ensure {
   if ((Test-HostRunning) -and (Test-HeartbeatFresh $maxAge)) { 'restarted' } else { 'failed' }
 }
 
+function Invoke-Stop {
+  # the user asked to quit: leave a marker so the watchdog does not revive us
+  $flag = Join-Path $script:Root 'stopped.flag'
+  Set-Content -Path $flag -Value (Get-Date).ToString('o') -Encoding ASCII
+  foreach ($t in @('BlueBye-Host', 'BlueBye-Watchdog')) {
+    Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
+  }
+  Get-Process -Name 'BlueByeSupervisor' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Stop-ScheduledTask -TaskName 'BlueBye-Tray' -ErrorAction SilentlyContinue
+  try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object {
+      $_.CommandLine -and $_.CommandLine -match 'bluebye-ui\.ps1'
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+  try {
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object {
+      $_.CommandLine -and $_.CommandLine -match 'bluebye\.ps1' -and $_.CommandLine -match '-Mode\s+Host'
+    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+  'stopped'
+}
+
+function Invoke-Start {
+  $flag = Join-Path $script:Root 'stopped.flag'
+  if (Test-Path $flag) { Remove-Item $flag -Force -ErrorAction SilentlyContinue }
+  foreach ($t in @('BlueBye-Host', 'BlueBye-Watchdog')) {
+    Enable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
+  }
+  if (Test-HostRunning) { 'running'; return }
+  Start-ScheduledTask -TaskName 'BlueBye-Host' -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 3
+  if (Test-HostRunning) { 'started' } else { 'failed' }
+}
+
 switch ($Mode) {
   'Host'    { Invoke-Host }
   'Tick'    { Invoke-Tick }
@@ -145,4 +182,6 @@ switch ($Mode) {
   'Probe'   { Invoke-Probe }
   'Test'    { Invoke-TestRadio }
   'Ensure'  { Invoke-Ensure }
+  'Start'   { Invoke-Start }
+  'Stop'    { Invoke-Stop }
 }

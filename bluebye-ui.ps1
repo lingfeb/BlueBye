@@ -733,8 +733,21 @@ $win.FindName('BtnUninstall').Add_Click({
 $script:Exiting = $false
 $script:TrayIcon = $null
 
+function Start-GuardIfStopped {
+  # opening the window means "I want the guard on"; the tray "quit" leaves a
+  # marker that also silences the watchdog, so remove it and start the task
+  $flag = Join-Path $here 'stopped.flag'
+  if (-not (Test-Path $flag)) { return }
+  Remove-Item $flag -Force -ErrorAction SilentlyContinue
+  foreach ($t in @('BlueBye-Host', 'BlueBye-Watchdog')) {
+    Enable-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue | Out-Null
+  }
+  Start-ScheduledTask -TaskName 'BlueBye-Host' -ErrorAction SilentlyContinue
+}
+
 function Show-MainWindow {
   try {
+    Start-GuardIfStopped
     $win.ShowInTaskbar = $true
     $win.Show()
     $win.WindowState = 'Normal'
@@ -817,8 +830,11 @@ if (-not $SelfTest) {
 
   [void]$menu.Items.Add('-')
 
-  $miExit = $menu.Items.Add('退出 BlueBye（守护继续后台运行）')
-  $miExit.Add_Click({ Exit-BlueBye })
+  $miExit = $menu.Items.Add('退出 BlueBye（停止守护）')
+  $miExit.Add_Click({
+    try { [void](Invoke-Engine 'Stop' 20000) } catch { }
+    Exit-BlueBye
+  })
 
   $ni.ContextMenuStrip = $menu
   $ni.Add_MouseDoubleClick({ Show-MainWindow })
@@ -836,6 +852,10 @@ $win.Add_Closing({
 })
 
 # ------------------------------------------------------------------- run ----
+
+# opening the app again means "I want the guard on" (it may have been stopped
+# from the tray menu, which leaves a marker so the watchdog stays quiet)
+if (-not $SelfTest) { Start-GuardIfStopped }
 
 Load-ConfigToUi
 Update-Status
